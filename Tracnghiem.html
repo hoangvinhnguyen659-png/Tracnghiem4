@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trắc Nghiệm Tin Học 12</title>
+    <style>
+        /* --- PHẦN GIAO DIỆN (CSS) --- */
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { background-color: #f0f2f5; display: flex; justify-content: center; min-height: 100vh; padding: 15px; }
+        .quiz-container { background: white; width: 100%; max-width: 600px; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); height: fit-content; }
+        
+        .quiz-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-weight: bold; color: #555; }
+        .progress-bar { width: 100%; height: 8px; background-color: #e9ecef; border-radius: 4px; margin-bottom: 20px; overflow: hidden; }
+        .progress-fill { height: 100%; background-color: #007bff; width: 0%; transition: width 0.3s ease; }
+        
+        .question-box { margin-bottom: 20px; }
+        .question-box h3 { color: #212529; font-size: 1.1rem; line-height: 1.5; }
+        
+        .options-grid { display: flex; flex-direction: column; gap: 10px; }
+        .option { padding: 12px 15px; border: 2px solid #e9ecef; border-radius: 8px; cursor: pointer; transition: all 0.2s; background: #fff; font-size: 1rem; color: #333; }
+        
+        /* Hiệu ứng khi chọn đúng/sai */
+        .option.correct { background-color: #d4edda; border-color: #28a745; color: #155724; font-weight: bold; }
+        .option.wrong { background-color: #f8d7da; border-color: #dc3545; color: #721c24; opacity: 0.8; }
+        .disabled { pointer-events: none; }
+        
+        #next-btn, #restart-btn { margin-top: 20px; width: 100%; padding: 12px; background-color: #007bff; color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer; display: none; }
+        #next-btn:active, #restart-btn:active { transform: scale(0.98); }
+        
+        .result-box { text-align: center; padding: 30px 0; }
+        .result-score { font-size: 2rem; color: #007bff; font-weight: bold; margin: 10px 0; }
+    </style>
+</head>
+<body>
+
+    <div class="quiz-container" id="quiz-ui">
+        <div class="quiz-header">
+            <span id="progress-text">Câu: --/--</span>
+            <span id="score-text">Đúng: 0</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" id="progress-bar-fill"></div></div>
+
+        <div class="question-box">
+            <h3 id="question-text">Đang tải dữ liệu...</h3>
+        </div>
+
+        <div class="options-grid" id="options-container"></div>
+        <button id="next-btn" onclick="nextQuestion()">Câu tiếp theo ➜</button>
+    </div>
+
+    <script>
+        // 1. DỮ LIỆU 120 CÂU HỎI (Đã chuyển đổi từ file của bạn)
+        // Quy ước đáp án: A=0, B=1, C=2, D=3
+        const rawData = [
+            { q: "Thuật ngữ 'Trí tuệ nhân tạo' (AI) chính thức được đưa ra tại sự kiện nào?", a: ["Phép thử Turing (1950)", "Hội thảo Dartmouth (1956)", "Hệ chuyên gia MYCIN (1970)", "Robot Sophia (2016)"], c: 1 },
+            { q: "Theo định nghĩa phổ biến, Trí tuệ nhân tạo (AI) là gì?", a: ["Lưu trữ dữ liệu khổng lồ", "Tính toán số học tốc độ cao", "Làm công việc mang tính trí tuệ con người", "Hoạt động liên tục không nghỉ"], c: 2 },
+            { q: "Youtube tự động đề xuất video dựa trên lịch sử xem thể hiện đặc trưng nào?", a: ["Khả năng suy luận", "Khả năng nhận thức", "Khả năng học", "Khả năng vận động"], c: 2 },
+            { q: "Hệ thống chẩn đoán bệnh dựa trên triệu chứng đầu vào thể hiện đặc trưng nào?", a: ["Khả năng nhận thức", "Khả năng suy luận", "Khả năng tạo sinh", "Khả năng giao tiếp"], c: 1 },
+            { q: "Đặc trưng 'Khả năng nhận thức' của AI thể hiện qua việc:", a: ["Tự sửa hành vi", "Dùng cảm biến (camera, radar) cảm nhận môi trường", "Viết thơ", "Tìm lỗi sai toán học"], c: 1 },
+            { q: "Tại sao Robot Asimo (1986) là bước tiến của AI?", a: ["Chạy bằng pin", "Nhận dạng, tương tác và di chuyển bằng hai chân", "Làm việc nhà máy", "Lưu trữ từ điển"], c: 1 },
+            { q: "Đặc trưng 'Giải quyết vấn đề' của AI nghĩa là:", a: ["Làm theo lệnh cứng nhắc", "Phân tích tình huống, chọn hành động đạt mục tiêu", "Tự nạp năng lượng", "In kết quả nhanh"], c: 1 },
+            { q: "AI yếu (như MYCIN) có đặc điểm gì?", a: ["Tư duy như người", "Giải quyết vấn đề chuyên biệt phạm vi hẹp", "Tự xây dựng robot", "Không cần dữ liệu"], c: 1 },
+            { q: "Sự kiện năm 2022 đánh dấu khả năng tương tác đàm thoại mạnh mẽ?", a: ["Hội thảo Dartmouth", "Robot Sophia", "ChatGPT ra đời", "Google Search"], c: 2 },
+            { q: "Xác định khoảng cách giữa hai mắt trong nhận dạng khuôn mặt thuộc giai đoạn nào?", a: ["Tách khuôn mặt", "Phân tích đặc điểm đặc trưng", "So sánh dữ liệu", "Thông báo kết quả"], c: 1 },
+            { q: "Ứng dụng điển hình của AI trong y tế là gì?", a: ["Robot Asimo", "Hệ chuyên gia MYCIN", "ChatGPT", "Vân tay"], c: 1 },
+            { q: "Trợ lý ảo (Siri, Google Assistant) dùng công nghệ nào?", a: ["Nhận dạng ảnh", "Xử lý ngôn ngữ tự nhiên (NLP)", "Điều khiển cơ học", "Đám mây"], c: 1 },
+            { q: "Tại sao bước 'Trích xuất đặc điểm' quan trọng trong nhận dạng chữ viết?", a: ["Làm đẹp ảnh", "Xác định nét chữ, độ cong đặc trưng", "Xóa màu sắc", "In ra giấy"], c: 1 },
+            { q: "Điểm danh học sinh bằng khuôn mặt dựa trên cơ chế nào?", a: ["Ghi âm giọng nói", "Quét vân tay", "Phân tích đặc điểm khuôn mặt so với dữ liệu", "Nhập mã số"], c: 2 },
+            { q: "Dịch máy (Machine Translation) là gì?", a: ["Tra từ điển tay", "Máy tính chuyển đổi ngôn ngữ tự động", "Sửa lỗi chính tả", "Ghi âm lời nói"], c: 1 },
+            { q: "Nhận dạng chữ viết tay là quá trình:", a: ["Viết văn bản mới", "Chuyển hình ảnh ký tự thành văn bản số", "Chấm điểm chữ đẹp", "Lưu ảnh đơn thuần"], c: 1 },
+            { q: "Hỏi 'Thời tiết thế nào' và được trả lời đúng thể hiện khả năng nào?", a: ["Nhận dạng ảnh", "Hiểu ngôn ngữ và truy xuất thông tin", "Điều khiển robot", "Sáng tác nhạc"], c: 1 },
+            { q: "Camera an ninh cảnh báo người lạ dựa trên công nghệ nào?", a: ["Nhận dạng chữ", "Nhận dạng khuôn mặt/hành vi", "Dịch máy", "Trợ lý ảo"], c: 1 },
+            { q: "Giai đoạn cuối cùng trong quy trình nhận dạng khuôn mặt là gì?", a: ["Phân tích điểm", "Tách khuôn mặt", "Đưa ra kết quả so khớp", "So sánh dữ liệu"], c: 2 },
+            { q: "Ứng dụng kết hợp nhận dạng hình ảnh và ngôn ngữ để dịch biển báo?", a: ["AlphaGo", "Google Dịch (Camera)", "Hệ chuyên gia y tế", "Soạn thảo văn bản"], c: 1 },
+            { q: "Rủi ro quyền riêng tư khi dùng AI là gì?", a: ["Bảo mật tuyệt đối", "Thu thập dữ liệu âm thầm, lộ thông tin", "Chỉ dùng dữ liệu công khai", "Tự xóa dữ liệu"], c: 1 },
+            { q: "Deepfake là ví dụ về cảnh báo nào?", a: ["An ninh hệ thống", "Tạo nội dung giả mạo lừa đảo", "Sáng tạo nghệ thuật", "Nhận dạng khuôn mặt"], c: 1 },
+            { q: "Tại sao AI thay thế con người làm việc là một lời cảnh báo?", a: ["Máy không sai sót", "Nguy cơ thất nghiệp diện rộng", "Con người nghỉ nhiều hơn", "Lương robot thấp"], c: 1 },
+            { q: "Định kiến thuật toán là gì?", a: ["Luôn công bằng", "Thiên vị/phân biệt đối xử do dữ liệu đầu vào", "Ưu tiên nước phát triển", "Cần con người quyết định"], c: 1 },
+            { q: "Lo ngại an ninh khi AI phát triển quá nhanh?", a: ["Tạo mã độc, tấn công mạng", "Tắt điện toàn cầu", "Mật khẩu vô dụng", "Quên cách dùng máy tính"], c: 0 },
+            { q: "Phụ thuộc quá mức vào AI dẫn đến hậu quả gì?", a: ["Thông minh hơn", "Giảm tư duy độc lập", "Ghi nhớ tốt hơn", "Không ảnh hưởng"], c: 1 },
+            { q: "Vũ khí tự hành thuộc cảnh báo lĩnh vực nào?", a: ["Kinh tế", "Quân sự và An ninh quốc tế", "Giáo dục", "Y tế"], c: 1 },
+            { q: "Video call người thân hỏi vay tiền nhưng hình ảnh giật lag, cảnh giác gì?", a: ["Dịch máy", "Deepfake (AI giả mạo)", "Trợ lý ảo", "Hệ chuyên gia"], c: 1 },
+            { q: "Đạo đức AI ra đời nhằm mục đích gì?", a: ["AI học đạo đức", "Đảm bảo AI an toàn, minh bạch, công bằng", "Cấm dùng AI", "Thay thế luật pháp"], c: 1 },
+            { q: "Học sinh dùng AI viết toàn bộ bài văn vi phạm cảnh báo nào?", a: ["An ninh mạng", "Quyền riêng tư", "Lạm dụng AI gây suy giảm tư duy", "Định kiến thuật toán"], c: 2 },
+            { q: "Thiết bị kết nối mạng LAN và chuyển tiếp dữ liệu đến chính xác cổng đích?", a: ["Modem", "Switch", "Repeater", "Cáp xoắn"], c: 1 },
+            { q: "Thiết bị chuyển đổi tín hiệu số sang tương tự và ngược lại?", a: ["Access Point", "Router", "Modem", "Switch"], c: 2 },
+            { q: "Khác biệt giữa Switch và Hub?", a: ["Switch kết nối internet", "Switch gửi tất cả", "Switch gửi chính xác máy đích, Hub gửi toàn bộ", "Switch không dây"], c: 2 },
+            { q: "Tại sao Router gọi là Bộ định tuyến?", a: ["Phát wifi", "Tìm đường đi tối ưu và chuyển gói tin", "Tăng tốc độ", "Chặn web xấu"], c: 1 },
+            { q: "Access Point có vai trò gì?", a: ["Thay thế Modem", "Phát sóng Wi-Fi từ mạng dây", "Lưu trữ dữ liệu", "Kết nối xa"], c: 1 },
+            { q: "Giao thức TCP/IP là gì?", a: ["Phần mềm diệt virus", "Quy tắc trao đổi dữ liệu mạng", "Tên cáp mạng", "Thiết bị bảo mật"], c: 1 },
+            { q: "Môi trường truyền dẫn tốc độ cao nhất, ít nhiễu nhất?", a: ["Cáp xoắn đôi", "Cáp đồng trục", "Cáp quang", "Wifi"], c: 2 },
+            { q: "Thiết bị vừa chuyển tín hiệu quang vừa phát Wifi?", a: ["Switch Layer 3", "Modem Wi-Fi", "Repeater", "Card mạng"], c: 1 },
+            { q: "Thiết bị nào là thiết bị đầu cuối?", a: ["Router", "Switch", "Laptop", "Modem"], c: 2 },
+            { q: "Muốn mở rộng sóng Wifi không cần kéo dây?", a: ["Hub", "Wi-Fi Repeater", "Switch", "Modem"], c: 1 },
+            { q: "Địa chỉ IP dùng để làm gì?", a: ["Đo tốc độ", "Định danh duy nhất thiết bị", "Diệt virus", "Lưu trữ đám mây"], c: 1 },
+            { q: "Dạng biểu diễn IPv4 điển hình?", a: ["4 số thập phân cách nhau dấu chấm", "8 nhóm thập lục phân", "Tên miền", "Nhị phân 128 bit"], c: 0 },
+            { q: "Tại sao cần chuyển sang IPv6?", a: ["Dễ nhớ hơn", "IPv4 cạn kiệt địa chỉ", "IPv4 không nối di động", "IPv6 miễn phí"], c: 1 },
+            { q: "IP tĩnh khác IP động thế nào?", a: ["Tĩnh tự đổi", "Tĩnh cố định, Động do DHCP cấp", "Tĩnh cho Wifi", "Tĩnh nhanh hơn"], c: 1 },
+            { q: "Giao thức HTTP/HTTPS dùng cho dịch vụ nào?", a: ["Email", "Web", "FTP", "Chat"], c: 1 },
+            { q: "Thành phần chuyển đổi tên miền sang IP?", a: ["TCP", "DNS", "Switch", "Firewall"], c: 1 },
+            { q: "Giá trị của mỗi octet trong IPv4?", a: ["1-100", "0-255", "0-512", "1-1000"], c: 1 },
+            { q: "Nếu DNS bị lỗi thì sao?", a: ["Tự tìm IP mới", "Không vào được bằng tên miền", "Ngắt mạng", "Nhanh hơn"], c: 1 },
+            { q: "IPv6 dùng bao nhiêu bit?", a: ["32 bit", "64 bit", "128 bit", "256 bit"], c: 2 },
+            { q: "Lệnh kiểm tra IP trên Windows?", a: ["ping", "ipconfig", "netstat", "tracert"], c: 1 },
+            { q: "HTML dùng để làm gì?", a: ["Lập trình AI", "Thiết kế cấu trúc trang web", "Quản lý DB", "Bảo mật mạng"], c: 1 },
+            { q: "Phần mở rộng của tệp HTML?", a: [".exe", ".txt", ".html hoặc .htm", ".mp3"], c: 2 },
+            { q: "Cấu trúc phần tử HTML thường gồm:", a: ["Thẻ mở, nội dung, thẻ đóng", "Mở và nội dung", "Đóng và nội dung", "Chỉ thẻ mở"], c: 0 },
+            { q: "Cặp thẻ bao quanh toàn bộ tài liệu HTML?", a: ["head", "body", "html", "title"], c: 2 },
+            { q: "Nội dung hiển thị trên trình duyệt nằm trong thẻ nào?", a: ["head", "body", "style", "script"], c: 1 },
+            { q: "Thẻ tiêu đề từ lớn đến nhỏ?", a: ["p1-p6", "h1-h6", "t1-t6", "header1-6"], c: 1 },
+            { q: "Thẻ <br> dùng để làm gì?", a: ["Đoạn mới", "Gạch ngang", "Ngắt dòng (xuống dòng)", "In đậm"], c: 2 },
+            { q: "Hiển thị tên trên tab trình duyệt dùng thẻ nào?", a: ["h1", "title (trong head)", "b", "p"], c: 1 },
+            { q: "Thẻ định nghĩa đoạn văn bản?", a: ["segment", "text", "p", "div"], c: 2 },
+            { q: "Mã đúng cho tiêu đề lớn nhất 'Tin học 12'?", a: ["h1 value=...", "<h1>Tin học 12</h1>", "title...", "p size=..."], c: 1 },
+            { q: "Tạo danh sách có thứ tự (1,2,3) dùng thẻ nào?", a: ["ul", "ol", "li", "list"], c: 1 },
+            { q: "Thẻ định nghĩa mục con (item)?", a: ["item", "ul", "li", "ol"], c: 2 },
+            { q: "Khác biệt ul và ol?", a: ["ul chèn ảnh", "ul không thứ tự (chấm), ol có thứ tự (số)", "ul trong head", "Không khác"], c: 1 },
+            { q: "Thẻ chèn hình ảnh?", a: ["image", "picture", "img", "src"], c: 2 },
+            { q: "Thuộc tính bắt buộc trong thẻ img để chỉ đường dẫn?", a: ["alt", "title", "src", "href"], c: 2 },
+            { q: "Thuộc tính alt trong thẻ img có tác dụng gì?", a: ["Đổi kích thước", "Văn bản thay thế khi lỗi ảnh", "Màu nền", "Hiệu ứng"], c: 1 },
+            { q: "Mã đúng để chèn ảnh logo.jpg rộng 200?", a: ["<img src='logo.jpg' width='200'>", "href...", "source...", "image..."], c: 0 },
+            { q: "<ol type='A'> hiển thị thế nào?", a: ["1, 2, 3", "A, B, C", "Vuông", "I, II, III"], c: 1 },
+            { q: "Mã đúng tạo danh sách chấm tròn (Toán, Lý, Hóa)?", a: ["ol...", "<ul><li>Toán</li><li>Lý</li><li>Hóa</li></ul>", "li ul...", "list..."], c: 1 },
+            { q: "Nếu chỉ set width=500 cho ảnh 1000x1000, chiều cao sẽ ra sao?", a: ["Méo", "Tự co giãn tỷ lệ (500x500)", "Mất nội dung", "Lỗi"], c: 1 },
+            { q: "Bắt đầu định nghĩa bảng dùng thẻ nào?", a: ["row", "table", "tab", "body"], c: 1 },
+            { q: "Tạo hàng (row) mới?", a: ["td", "th", "tr", "hr"], c: 2 },
+            { q: "Khác biệt th và td?", a: ["th cho hàng", "th là tiêu đề (đậm, giữa), td là dữ liệu", "th ở cuối", "Giống nhau"], c: 1 },
+            { q: "Hiển thị đường viền bảng dùng thuộc tính nào?", a: ["line", "border='1'", "grid", "outline"], c: 1 },
+            { q: "Bảng có 3 tr, mỗi tr có 4 td. Hỏi số hàng cột?", a: ["4 hàng 3 cột", "3 hàng 4 cột", "12 hàng", "7 hàng"], c: 1 },
+            { q: "Tạo ô dữ liệu trong hàng?", a: ["tr", "td", "table", "th"], c: 1 },
+            { q: "Gộp 2 cột thành 1 ô?", a: ["rowspan", "colspan='2'", "merge", "width"], c: 1 },
+            { q: "Mã đúng bảng 1 hàng 2 ô (Họ tên, Lớp)?", a: ["<table><tr><td>Họ tên</td><td>Lớp</td></tr></table>", "Sai cấu trúc", "Sai", "Sai"], c: 0 },
+            { q: "Thứ tự lồng nhau đúng?", a: ["tr-table-td", "table-td-tr", "table -> tr -> td", "td-tr-table"], c: 2 },
+            { q: "Gộp tiêu đề bao phủ 3 cột?", a: ["rowspan", "<th colspan='3'>...</th>", "tr colspan", "td width"], c: 1 },
+            { q: "Thẻ tạo siêu liên kết?", a: ["link", "a", "href", "url"], c: 1 },
+            { q: "Thuộc tính chỉ định đích đến của thẻ a?", a: ["src", "alt", "href", "target"], c: 2 },
+            { q: "Mở liên kết trong tab mới dùng thuộc tính nào?", a: ["_self", "_blank", "_new", "_parent"], c: 1 },
+            { q: "Mã đúng liên kết Google hiển thị chữ 'Tìm kiếm'?", a: ["<a href='...'>Tìm kiếm</a>", "src...", "link...", "a..."], c: 0 },
+            { q: "Thẻ chèn video HTML5?", a: ["media", "movie", "video", "play"], c: 2 },
+            { q: "Thẻ chèn âm thanh?", a: ["sound", "audio", "music", "mp3"], c: 1 },
+            { q: "Thuộc tính controls trong video/audio làm gì?", a: ["Đổi màu", "Hiện nút Play/Pause/Volume", "Tự phát", "Lặp"], c: 1 },
+            { q: "Biến ảnh thành liên kết?", a: ["<a href...><img...></a>", "img href...", "a src...", "link..."], c: 0 },
+            { q: "Chèn nhạc có nút điều khiển?", a: ["src...", "<audio src='...' controls></audio>", "music...", "audio href..."], c: 1 },
+            { q: "Siêu văn bản khác văn bản thường ở đâu?", a: ["Màu đẹp", "Chứa liên kết (link)", "Chỉ đọc trên đt", "Không chứa ảnh"], c: 1 },
+            { q: "Thẻ tạo biểu mẫu?", a: ["input", "form", "select", "label"], c: 1 },
+            { q: "Nhập văn bản 1 dòng dùng type gì?", a: ["password", "checkbox", "text", "radio"], c: 2 },
+            { q: "type='password' khác text chỗ nào?", a: ["Kiểm tra đúng", "Ẩn ký tự thành dấu chấm/sao", "Chỉ nhập số", "Không cho copy"], c: 1 },
+            { q: "Thuộc tính placeholder làm gì?", a: ["Tên định danh", "Hiện chữ mờ gợi ý", "Giá trị mặc định", "Giới hạn ký tự"], c: 1 },
+            { q: "Nhập văn bản nhiều dòng?", a: ["input textarea", "textarea", "input text rows", "label area"], c: 1 },
+            { q: "Thuộc tính id dùng làm gì?", a: ["Đặt tên gửi server", "Định danh duy nhất trên trang", "Đổi màu", "Ẩn"], c: 1 },
+            { q: "Mã ô mật khẩu có gợi ý?", a: ["type=text", "<input type='password' placeholder='...'>", "value...", "password..."], c: 1 },
+            { q: "Nhập email dùng type gì?", a: ["text", "email", "mail", "address"], c: 1 },
+            { q: "Thuộc tính rows/cols trong textarea?", a: ["Số từ", "Số hàng/cột (kích thước hiển thị)", "Màu/cỡ chữ", "Khoảng cách"], c: 1 },
+            { q: "Nhập số điện thoại trên mobile tốt nhất?", a: ["text", "tel", "phone", "number"], c: 1 },
+            { q: "Chọn 1 trong nhiều (Giới tính)?", a: ["checkbox", "radio", "select", "button"], c: 1 },
+            { q: "Chọn nhiều cùng lúc (Sở thích)?", a: ["radio", "checkbox", "multi", "submit"], c: 1 },
+            { q: "Để radio thuộc cùng 1 nhóm (chỉ chọn 1)?", a: ["Cùng id", "Cùng name", "Cùng value", "Cạnh nhau"], c: 1 },
+            { q: "Tạo danh sách thả xuống?", a: ["list", "dropdown", "select", "option"], c: 2 },
+            { q: "Mục con trong select?", a: ["li", "item", "option", "choice"], c: 2 },
+            { q: "Nút gửi form?", a: ["button", "reset", "submit", "file"], c: 2 },
+            { q: "Thuộc tính hiện chữ trên nút?", a: ["name", "id", "value", "placeholder"], c: 2 },
+            { q: "Nút chọn file tải lên?", a: ["upload", "file", "image", "submit"], c: 1 },
+            { q: "Mặc định chọn sẵn?", a: ["selected", "checked", "active", "on"], c: 1 },
+            { q: "Tạo nút 'Đăng ký'?", a: ["<input type='submit' value='Đăng ký'>", "button text", "button type=text", "radio"], c: 0 }
+        ];
+
+        // 2. LOGIC TRẮC NGHIỆM
+        let questions = [];
+        let currentIndex = 0;
+        let score = 0;
+
+        function shuffle(array) {
+            return array.sort(() => Math.random() - 0.5);
+        }
+
+        function startQuiz() {
+            questions = shuffle([...rawData]); // Xáo trộn câu hỏi
+            currentIndex = 0;
+            score = 0;
+            document.getElementById('score-text').innerText = `Đúng: 0`;
+            showQuestion();
+        }
+
+        function showQuestion() {
+            if (currentIndex >= questions.length) {
+                showResult();
+                return;
+            }
+
+            const q = questions[currentIndex];
+            document.getElementById('progress-text').innerText = `Câu: ${currentIndex + 1}/${questions.length}`;
+            document.getElementById('progress-bar-fill').style.width = `${((currentIndex) / questions.length) * 100}%`;
+            document.getElementById('question-text').innerText = q.q;
+
+            const optsDiv = document.getElementById('options-container');
+            optsDiv.innerHTML = '';
+
+            q.a.forEach((optText, i) => {
+                const btn = document.createElement('div');
+                btn.className = 'option';
+                btn.innerText = optText;
+                btn.onclick = () => checkAnswer(btn, i, q.c);
+                optsDiv.appendChild(btn);
+            });
+
+            document.getElementById('next-btn').style.display = 'none';
+        }
+
+        function checkAnswer(btn, selectedIndex, correctIndex) {
+            const options = document.querySelectorAll('.option');
+            options.forEach(o => o.classList.add('disabled')); // Khóa chọn lại
+
+            if (selectedIndex === correctIndex) {
+                btn.classList.add('correct');
+                score++;
+                document.getElementById('score-text').innerText = `Đúng: ${score}`;
+            } else {
+                btn.classList.add('wrong');
+                options[correctIndex].classList.add('correct'); // Hiện đáp án đúng
+            }
+
+            document.getElementById('next-btn').style.display = 'block';
+        }
+
+        function nextQuestion() {
+            currentIndex++;
+            showQuestion();
+        }
+
+        function showResult() {
+            document.getElementById('quiz-ui').innerHTML = `
+                <div class="result-box">
+                    <h2>Hoàn thành!</h2>
+                    <div class="result-score">Điểm số: ${score}/${questions.length}</div>
+                    <p>Bạn đã trả lời đúng ${Math.round((score/questions.length)*100)}% số câu hỏi.</p>
+                    <button id="restart-btn" style="display:inline-block; margin-top:20px;" onclick="location.reload()">Làm lại bài thi</button>
+                </div>
+            `;
+        }
+
+        // Tự động chạy khi mở trang
+        startQuiz();
+
+    </script>
+</body>
+</html>
